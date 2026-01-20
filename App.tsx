@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Home, Users, ClipboardCheck, Ban, FileText, 
   Files, BarChart3, Clock, Menu, PlusCircle,
-  LogOut, ShieldCheck, UserCog, ListOrdered, X
+  LogOut, ShieldCheck, UserCog, ListOrdered, X, Loader2
 } from 'lucide-react';
 import { View, Student, AttendanceRecord, DocumentItem, Modality, User, UserRole } from './types';
+import { studentService } from './services/studentService';
+import { attendanceService } from './services/attendanceService';
 import Dashboard from './components/Dashboard';
 import Attendance from './components/Attendance';
 import StudentForm from './components/StudentForm';
@@ -24,6 +26,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -34,18 +37,31 @@ const App: React.FC = () => {
     { id: 't2', name: 'Profa. Eliana Costa', email: 'eliana@gestao.go.gov.br', cpf: '222.222.222-22', role: UserRole.TEACHER, active: true },
   ]);
 
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [fetchedStudents, fetchedAttendance] = await Promise.all([
+        studentService.getAll(),
+        attendanceService.getToday()
+      ]);
+      setStudents(fetchedStudents);
+      setAttendance(fetchedAttendance);
+    } catch (err) {
+      console.error("Erro ao carregar dados do Supabase:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const initialStudents: Student[] = [
-      { id: '1', cpf: '12345678901', name: 'João Silva', department: 'Sede Administrativa', phone: '62988887777', birthDate: '1985-05-15', age: 39, gender: 'Masculino', blocked: false, modality: Modality.ACADEMIA, trainingDays: 'Segunda, Quarta e Sexta', trainingTime: '06h', createdAt: new Date().toISOString(), onWaitlist: false },
-      { id: '2', cpf: '98765432100', name: 'Maria Souza', department: 'Coordenação Regional', phone: '62911112222', birthDate: '1992-10-20', age: 32, gender: 'Feminino', blocked: true, modality: Modality.FUNCIONAL, onWaitlist: false, createdAt: new Date().toISOString() },
-      { id: '3', cpf: '11122233344', name: 'Carlos Santos', department: 'Diretoria de TI', phone: '62999990000', birthDate: '1978-03-02', age: 46, gender: 'Masculino', blocked: false, modality: Modality.DANCA, onWaitlist: false, createdAt: new Date().toISOString() },
-    ];
-    setStudents(initialStudents);
+    if (isAuthenticated) {
+      loadData();
+    }
     
     if (window.innerWidth >= 1024) {
       setIsSidebarOpen(true);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -65,7 +81,7 @@ const App: React.FC = () => {
     }
   };
 
-  const addStudent = (student: Student) => {
+  const addStudent = async (student: Student) => {
     const activeInSlot = students.filter(s => 
       !s.onWaitlist && 
       s.modality === student.modality && 
@@ -76,17 +92,51 @@ const App: React.FC = () => {
     const isFull = activeInSlot.length >= 10;
     const studentWithStatus = { ...student, onWaitlist: isFull };
 
-    setStudents(prev => [...prev, studentWithStatus]);
-    
-    if (isFull) {
-      alert(`AVISO: Turma lotada. Adicionado à FILA DE ESPERA.`);
-      handleNavigate('waitlist');
-    } else {
-      handleNavigate('students-list');
+    try {
+      const savedStudent = await studentService.create(studentWithStatus);
+      setStudents(prev => [...prev, savedStudent]);
+      
+      if (isFull) {
+        alert(`AVISO: Turma lotada. Adicionado à FILA DE ESPERA.`);
+        handleNavigate('waitlist');
+      } else {
+        handleNavigate('students-list');
+      }
+    } catch (err) {
+      alert("Erro ao salvar matrícula. Verifique o console.");
     }
   };
 
-  // Definição dos itens de menu com base na sua solicitação
+  const deleteStudent = async (id: string) => {
+    if (!confirm("Deseja realmente remover esta matrícula?")) return;
+    try {
+      await studentService.delete(id);
+      setStudents(p => p.filter(s => s.id !== id));
+    } catch (err) {
+      alert("Erro ao remover.");
+    }
+  };
+
+  const toggleStudentBlock = async (cpf: string) => {
+    const student = students.find(s => s.cpf === cpf);
+    if (!student) return;
+    try {
+      await studentService.toggleBlock(cpf, !student.blocked);
+      setStudents(p => p.map(s => s.cpf === cpf ? {...s, blocked: !s.blocked} : s));
+    } catch (err) {
+      alert("Erro ao atualizar status.");
+    }
+  };
+
+  const recordAttendance = async (record: AttendanceRecord) => {
+    try {
+      await attendanceService.record(record.studentCpf, record.hour, record.photo);
+      setAttendance(p => [record, ...p]);
+    } catch (err) {
+      alert("Erro ao gravar frequência.");
+    }
+  };
+
   const menuItems = [
     { id: 'home', label: 'Início', icon: Home, roles: [UserRole.ADMIN, UserRole.TEACHER] },
     { id: 'attendance', label: 'Frequência', icon: ClipboardCheck, roles: [UserRole.ADMIN, UserRole.TEACHER] },
@@ -108,13 +158,20 @@ const App: React.FC = () => {
   const filteredMenu = menuItems.filter(item => item.roles.includes(currentUser.role));
 
   const renderView = () => {
+    if (isLoading) return (
+      <div className="flex flex-col items-center justify-center h-64 text-emerald-600">
+        <Loader2 className="animate-spin mb-4" size={48} />
+        <p className="font-bold uppercase tracking-widest text-xs">Sincronizando com Supabase...</p>
+      </div>
+    );
+
     switch (currentView) {
       case 'home': return <Dashboard students={students} attendance={attendance} onNavigate={handleNavigate} user={currentUser} />;
-      case 'attendance': return <Attendance students={students} attendance={attendance} onAddAttendance={(r) => setAttendance(p => [r, ...p])} />;
+      case 'attendance': return <Attendance students={students} attendance={attendance} onAddAttendance={recordAttendance} />;
       case 'add-student': return <StudentForm onSave={addStudent} students={students} />;
-      case 'students-list': return <StudentList students={students.filter(s => !s.onWaitlist)} onDelete={(id) => setStudents(p => p.filter(s => s.id !== id))} isAdmin={currentUser.role === UserRole.ADMIN} />;
-      case 'waitlist': return <Waitlist students={students.filter(s => s.onWaitlist)} onDelete={(id) => setStudents(p => p.filter(s => s.id !== id))} />;
-      case 'block-student': return <BlockManagement students={students} onToggleBlock={(cpf) => setStudents(p => p.map(s => s.cpf === cpf ? {...s, blocked: !s.blocked} : s))} />;
+      case 'students-list': return <StudentList students={students.filter(s => !s.onWaitlist)} onDelete={deleteStudent} isAdmin={currentUser.role === UserRole.ADMIN} />;
+      case 'waitlist': return <Waitlist students={students.filter(s => s.onWaitlist)} onDelete={deleteStudent} />;
+      case 'block-student': return <BlockManagement students={students} onToggleBlock={toggleStudentBlock} />;
       case 'teachers': return <TeacherManagement teachers={teachers} onAddTeacher={(t) => setTeachers(p => [...p, t])} onRemoveTeacher={(id) => setTeachers(p => p.filter(t => t.id !== id))} />;
       case 'documents': return <Documents documents={documents.filter(d => !d.studentId)} setDocuments={setDocuments} />;
       case 'student-documents': return <StudentDocuments students={students} documents={documents.filter(d => !!d.studentId)} setDocuments={setDocuments} />;
@@ -126,15 +183,10 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-gray-100 font-sans text-gray-900">
-      {/* Overlay para mobile */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-          onClick={() => setIsSidebarOpen(false)} 
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {/* Sidebar Responsiva */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 transition-transform duration-200 ease-in-out
@@ -142,9 +194,7 @@ const App: React.FC = () => {
       `}>
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <h1 className="font-bold text-xl tracking-tight">Academia <span className="text-emerald-500">GO</span></h1>
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden">
-            <X size={20} />
-          </button>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden"><X size={20} /></button>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4">
@@ -154,9 +204,7 @@ const App: React.FC = () => {
                 <button
                   onClick={() => handleNavigate(item.id as View)}
                   className={`w-full flex items-center p-3 rounded-lg transition-colors ${
-                    currentView === item.id 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    currentView === item.id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
                   <item.icon size={20} className="mr-3 shrink-0" />
@@ -168,26 +216,18 @@ const App: React.FC = () => {
         </nav>
         
         <div className="p-4 border-t border-slate-800">
-           <button 
-            onClick={handleLogout}
-            className="w-full flex items-center p-3 text-slate-400 hover:text-white transition-colors"
-           >
+           <button onClick={handleLogout} className="w-full flex items-center p-3 text-slate-400 hover:text-white transition-colors">
             <LogOut size={20} className="mr-3" />
             <span className="font-medium">Sair</span>
           </button>
         </div>
       </aside>
 
-      {/* Área Principal */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg">
-              <Menu size={24} />
-            </button>
-            <h2 className="text-lg font-bold text-gray-800 truncate">
-              {menuItems.find(m => m.id === currentView)?.label || 'Sistema'}
-            </h2>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg"><Menu size={24} /></button>
+            <h2 className="text-lg font-bold text-gray-800 truncate">{menuItems.find(m => m.id === currentView)?.label || 'Sistema'}</h2>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:block text-right">
@@ -201,9 +241,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-6xl mx-auto">
-            {renderView()}
-          </div>
+          <div className="max-w-6xl mx-auto">{renderView()}</div>
         </div>
       </main>
     </div>
