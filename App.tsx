@@ -45,7 +45,6 @@ const App: React.FC = () => {
       setAttendance(fetchedAttendance);
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
-      // Evitamos o alert aqui para não travar a UI de login
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +104,16 @@ const App: React.FC = () => {
       alert("ERRO AO SALVAR: " + (err.message || "Consulte o administrador."));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const updateStudent = async (student: Student) => {
+    try {
+      const updated = await studentService.update(student.id, student);
+      setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+    } catch (err: any) {
+      alert("Erro ao atualizar: " + err.message);
+      throw err;
     }
   };
 
@@ -172,7 +181,7 @@ const App: React.FC = () => {
       case 'attendance': return <Attendance students={students} attendance={attendance} onAddAttendance={recordAttendance} />;
       case 'system-users': return <SystemUsers />;
       case 'add-student': return <StudentForm onSave={addStudent} students={students} isSaving={isSaving} />;
-      case 'students-list': return <StudentList students={students.filter(s => !s.onWaitlist)} onDelete={deleteStudent} isAdmin={currentUser.role === UserRole.ADMIN} />;
+      case 'students-list': return <StudentList students={students.filter(s => !s.onWaitlist)} onDelete={deleteStudent} onUpdate={updateStudent} isAdmin={currentUser.role === UserRole.ADMIN} />;
       case 'waitlist': return <Waitlist students={students.filter(s => s.onWaitlist)} onDelete={deleteStudent} />;
       case 'block-student': return <BlockManagement students={students} onToggleBlock={toggleStudentBlock} />;
       case 'documents': return <Documents documents={documents.filter(d => !d.studentId)} setDocuments={setDocuments} />;

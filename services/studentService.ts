@@ -49,7 +49,6 @@ export const studentService = {
   },
 
   async create(student: Student) {
-    // Removemos o ID temporário do frontend para o Supabase gerar um UUID
     const { data, error } = await supabase
       .from('students')
       .insert([mapToDb(student)])
@@ -57,6 +56,20 @@ export const studentService = {
     
     if (error) {
       console.error("Erro Supabase (create):", error.message);
+      throw error;
+    }
+    return mapFromDb(data[0]);
+  },
+
+  async update(id: string, student: Partial<Student>) {
+    const { data, error } = await supabase
+      .from('students')
+      .update(mapToDb(student))
+      .eq('id', id)
+      .select();
+    
+    if (error) {
+      console.error("Erro Supabase (update):", error.message);
       throw error;
     }
     return mapFromDb(data[0]);
