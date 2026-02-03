@@ -133,11 +133,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ onSave, students, initialData
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
               {(formData.modality === Modality.ACADEMIA ? ['06h','07h','11h','12h','13h','17h','18h','19h'] : ['07h10','11h10','17h10','18h']).map(time => {
                 const occ = getOccupancy(time);
-                const full = occ >= 10;
+                // Atualizado limite para 12 alunos por turma
+                const full = occ >= 12;
                 return (
                   <button key={time} type="button" disabled={isSaving} onClick={() => setFormData({...formData, trainingTime: time})} className={`p-3 rounded-lg border-2 text-center transition-all ${formData.trainingTime === time ? 'bg-emerald-600 border-emerald-600 text-white ring-2 ring-emerald-100' : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-emerald-200'}`}>
                     <div className="text-sm font-bold">{time}</div>
-                    <div className={`text-[10px] font-medium ${full ? (formData.trainingTime === time ? 'text-white/80' : 'text-orange-600') : 'text-emerald-600'}`}>{occ}/10 vagas</div>
+                    <div className={`text-[10px] font-medium ${full ? (formData.trainingTime === time ? 'text-white/80' : 'text-orange-600') : 'text-emerald-600'}`}>{occ}/12 vagas</div>
                     {full && <div className={`text-[10px] font-black uppercase mt-1 leading-none ${formData.trainingTime === time ? 'text-orange-200' : 'text-orange-600'}`}>Fila de Espera</div>}
                   </button>
                 );

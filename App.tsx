@@ -86,7 +86,8 @@ const App: React.FC = () => {
       s.trainingTime === student.trainingTime
     );
 
-    const isFull = activeInSlot.length >= 10;
+    // Atualizado limite para 12 alunos por turma
+    const isFull = activeInSlot.length >= 12;
     const studentWithStatus = { ...student, onWaitlist: isFull };
 
     setIsSaving(true);

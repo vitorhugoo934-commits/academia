@@ -24,7 +24,7 @@ const Waitlist: React.FC<WaitlistProps> = ({ students, onDelete }) => {
             <ListOrdered size={32} className="text-orange-500" />
             Fila de Espera
           </h2>
-          <p className="text-orange-600 font-bold text-xs uppercase tracking-widest">Servidores aguardando vaga (Capacidade: 10/turma)</p>
+          <p className="text-orange-600 font-bold text-xs uppercase tracking-widest">Servidores aguardando vaga (Capacidade: 12/turma)</p>
         </div>
         
         <div className="relative group">
