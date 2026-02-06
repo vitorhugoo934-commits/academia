@@ -51,6 +51,8 @@ export interface DocumentItem {
   title: string;
   fileName: string;
   uploadDate: string;
+  fileUrl?: string; // URL para visualização/download
+  fileType?: string; // MIME Type
   studentId?: string;
 }
 

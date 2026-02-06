@@ -8,6 +8,7 @@ import {
 import { View, Student, AttendanceRecord, DocumentItem, Modality, User, UserRole } from './types';
 import { studentService } from './services/studentService';
 import { attendanceService } from './services/attendanceService';
+import { documentService } from './services/documentService';
 import Dashboard from './components/Dashboard';
 import Attendance from './components/Attendance';
 import StudentForm from './components/StudentForm';
@@ -37,12 +38,14 @@ const App: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [fetchedStudents, fetchedAttendance] = await Promise.all([
+      const [fetchedStudents, fetchedAttendance, fetchedDocuments] = await Promise.all([
         studentService.getAll(),
-        attendanceService.getToday()
+        attendanceService.getToday(),
+        documentService.getAll()
       ]);
       setStudents(fetchedStudents);
       setAttendance(fetchedAttendance);
+      setDocuments(fetchedDocuments);
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
     } finally {
@@ -149,6 +152,25 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveDocument = async (doc: Partial<DocumentItem>) => {
+    try {
+      const saved = await documentService.create(doc);
+      setDocuments(prev => [saved, ...prev]);
+    } catch (err: any) {
+      alert("Erro ao salvar documento: " + err.message);
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!confirm("Remover este documento permanentemente?")) return;
+    try {
+      await documentService.delete(id);
+      setDocuments(prev => prev.filter(d => d.id !== id));
+    } catch (err: any) {
+      alert("Erro ao remover documento: " + err.message);
+    }
+  };
+
   const menuItems = [
     { id: 'home', label: 'Início', icon: Home, roles: [UserRole.ADMIN, UserRole.TEACHER] },
     { id: 'attendance', label: 'Frequência', icon: ClipboardCheck, roles: [UserRole.ADMIN, UserRole.TEACHER] },
@@ -185,8 +207,8 @@ const App: React.FC = () => {
       case 'students-list': return <StudentList students={students.filter(s => !s.onWaitlist)} onDelete={deleteStudent} onUpdate={updateStudent} isAdmin={currentUser.role === UserRole.ADMIN} />;
       case 'waitlist': return <Waitlist students={students.filter(s => s.onWaitlist)} onDelete={deleteStudent} onUpdate={updateStudent} />;
       case 'block-student': return <BlockManagement students={students} onToggleBlock={toggleStudentBlock} />;
-      case 'documents': return <Documents documents={documents.filter(d => !d.studentId)} setDocuments={setDocuments} />;
-      case 'student-documents': return <StudentDocuments students={students} documents={documents.filter(d => !!d.studentId)} setDocuments={setDocuments} />;
+      case 'documents': return <Documents documents={documents.filter(d => !d.studentId)} onSaveDocument={handleSaveDocument} onDeleteDocument={handleDeleteDocument} />;
+      case 'student-documents': return <StudentDocuments students={students} documents={documents.filter(d => !!d.studentId)} onSaveDocument={handleSaveDocument} onDeleteDocument={handleDeleteDocument} />;
       case 'reports': return <Reports students={students} attendance={attendance} />;
       case 'schedules': return <Schedules students={students} />;
       default: return <Dashboard students={students} attendance={attendance} onNavigate={handleNavigate} user={currentUser} />;
